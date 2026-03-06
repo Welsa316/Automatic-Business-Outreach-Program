@@ -17,7 +17,7 @@ from pathlib import Path
 from tkinter import (
     Tk, ttk, StringVar, IntVar, BooleanVar,
     filedialog, messagebox, scrolledtext,
-    N, S, E, W, END, DISABLED, NORMAL, LEFT, BOTH, X, Y, TOP, BOTTOM, RIGHT,
+    N, S, E, W, EW, END, DISABLED, NORMAL, LEFT, BOTH, X, Y, TOP, BOTTOM, RIGHT,
 )
 
 # ---------------------------------------------------------------------------
