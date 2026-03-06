@@ -5,11 +5,11 @@ Run this once:
     python build_exe.py
 
 It will create:
-    dist/LeadEngine/LeadEngine.exe   (plus supporting files)
+    dist/LeadEngine/LeadEngine.exe   (the GUI app)
 
 To use:
     1. Copy the entire dist/LeadEngine/ folder wherever you want
-    2. Put your CSV file in that same folder
+    2. Put your CSV file in that same folder (or browse to it from the app)
     3. Double-click LeadEngine.exe
 """
 
@@ -32,7 +32,7 @@ def main():
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "--name", "LeadEngine",
-        "--console",                   # keep the terminal window (we need it for interactive prompts)
+        "--windowed",                  # no terminal window — proper GUI app
         "--noconfirm",                 # overwrite previous build without asking
         "--add-data", "lead_engine;lead_engine",  # bundle the package
         "--hidden-import", "anthropic",
@@ -47,7 +47,7 @@ def main():
         "--hidden-import", "socksio",
         "--hidden-import", "idna",
         "--hidden-import", "charset_normalizer",
-        "run.py",
+        "gui.py",                      # build the GUI version
     ]
 
     result = subprocess.run(cmd, cwd=str(Path(__file__).parent))
@@ -65,13 +65,11 @@ def main():
     print("\n" + "=" * 55)
     print("  BUILD SUCCESSFUL")
     print("=" * 55)
-    print(f"\n  Your .exe is at:\n  {dist_dir / 'LeadEngine.exe'}\n")
+    print(f"\n  Your app is at:\n  {dist_dir / 'LeadEngine.exe'}\n")
     print("  To use it:")
     print("  1. Copy the entire dist/LeadEngine/ folder to where you want")
-    print("  2. Drop your CSV file into that folder")
-    print("  3. Double-click LeadEngine.exe")
-    print("  4. On first run it will ask for your Anthropic API key")
-    print("     (saved automatically so you only do it once)")
+    print("  2. Double-click LeadEngine.exe")
+    print("  3. Browse to your CSV, paste your API key, and hit Run")
     print()
 
 
