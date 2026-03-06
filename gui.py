@@ -40,6 +40,7 @@ from lead_engine import config
 config.ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 from lead_engine.loader import load_csv
 from lead_engine.analyzer import analyze_websites
+from lead_engine.contact_discovery import discover_all_contacts
 from lead_engine.scorer import score_all
 from lead_engine.messenger import generate_messages
 from lead_engine.writer import write_outputs
@@ -100,6 +101,7 @@ class LeadEngineApp:
         self.ai_limit = IntVar(value=0)
         self.score_threshold = IntVar(value=config.MESSAGE_SCORE_THRESHOLD)
         self.skip_analysis = BooleanVar(value=False)
+        self.skip_contacts = BooleanVar(value=False)
         self.skip_ai = BooleanVar(value=False)
         self.api_key_var = StringVar(value=config.ANTHROPIC_API_KEY)
         self.running = False
@@ -199,6 +201,9 @@ class LeadEngineApp:
         chk_frame.pack(fill=X, padx=12, pady=(0, 10))
         ttk.Checkbutton(chk_frame, text="Skip website analysis",
                          variable=self.skip_analysis,
+                         style="Toggle.TCheckbutton").pack(side=LEFT, padx=(0, 20))
+        ttk.Checkbutton(chk_frame, text="Skip contact discovery",
+                         variable=self.skip_contacts,
                          style="Toggle.TCheckbutton").pack(side=LEFT, padx=(0, 20))
         ttk.Checkbutton(chk_frame, text="Skip AI message generation",
                          variable=self.skip_ai,
@@ -389,49 +394,71 @@ class LeadEngineApp:
             ai_limit = self.ai_limit.get()
             threshold = self.score_threshold.get()
             skip_analyze = self.skip_analysis.get()
+            skip_contacts = self.skip_contacts.get()
             skip_ai = self.skip_ai.get()
 
             t_start = time.time()
 
             # ---- Stage 1: Load CSV ----
             self._set_progress(5, "Loading CSV ...")
-            self._log("[1/4] Loading and normalising CSV ...")
+            self._log("[1/5] Loading and normalising CSV ...")
             businesses = load_csv(csv_path)
             if limit:
                 businesses = businesses[:limit]
             self._log(f"      Loaded {len(businesses)} businesses.")
-            self._set_progress(15)
+            self._set_progress(10)
 
             # ---- Stage 2: Website analysis ----
-            # Auto-skip when targeting only no-website businesses
             do_skip = skip_analyze or config.NO_WEBSITE_ONLY
             if do_skip:
                 reason = "no-website-only mode" if config.NO_WEBSITE_ONLY else "skipped"
-                self._set_progress(40, f"Skipping website analysis ({reason})")
-                self._log(f"[2/4] Skipping website analysis ({reason}).")
+                self._set_progress(15, f"Skipping website analysis ({reason})")
+                self._log(f"[2/5] Skipping website analysis ({reason}).")
                 analyses = {}
             else:
-                self._set_progress(20, "Analysing websites ...")
-                self._log(f"[2/4] Analysing websites (this may take a moment) ...")
+                self._set_progress(15, "Analysing websites ...")
+                self._log(f"[2/5] Analysing websites (this may take a moment) ...")
                 analyses = asyncio.run(analyze_websites(businesses))
                 ok = sum(1 for a in analyses.values() if a.reachable)
                 self._log(f"      {ok} reachable / {len(analyses)} checked.")
+            self._set_progress(20)
+
+            # ---- Stage 3: Contact discovery ----
+            if skip_contacts:
+                self._set_progress(45, "Skipping contact discovery")
+                self._log("[3/5] Skipping contact discovery.")
+            else:
+                self._set_progress(25, "Discovering contacts ...")
+                self._log("[3/5] Discovering contacts (social media, emails) ...")
+                self._log("      This searches for each business — may take a few minutes.")
+                contacts = discover_all_contacts(businesses)
+                for i, biz in enumerate(businesses):
+                    info = contacts.get(i)
+                    if info:
+                        biz["instagram"] = info.instagram
+                        biz["facebook"] = info.facebook
+                        biz["tiktok"] = info.tiktok
+                        biz["email"] = info.email
+                        biz["yelp"] = info.yelp
+                        biz["contact_methods_found"] = info.contact_methods_found
+                found_any = sum(1 for c in contacts.values() if c.contact_methods_found > 0)
+                self._log(f"      Found contacts for {found_any}/{len(businesses)} businesses.")
             self._set_progress(50)
 
-            # ---- Stage 3: Scoring ----
+            # ---- Stage 4: Scoring ----
             self._set_progress(55, "Scoring leads ...")
-            self._log("[3/4] Scoring leads ...")
+            self._log("[4/5] Scoring leads ...")
             businesses = score_all(businesses, analyses)
             top = businesses[0] if businesses else {}
             self._log(f"      Top lead: {top.get('business_name', '?')} "
                       f"(score={top.get('lead_score', 0)})")
             self._set_progress(65)
 
-            # ---- Stage 4: AI messages ----
+            # ---- Stage 5: AI messages ----
             if skip_ai or not config.ANTHROPIC_API_KEY:
                 reason = "disabled" if skip_ai else "no API key"
                 self._set_progress(85, f"Skipping AI messages ({reason})")
-                self._log(f"[4/4] Skipping AI messages ({reason}).")
+                self._log(f"[5/5] Skipping AI messages ({reason}).")
                 for biz in businesses:
                     biz["email_message"] = ""
                     biz["contact_form_message"] = ""
@@ -439,7 +466,7 @@ class LeadEngineApp:
                     biz["message_error"] = "skipped" if skip_ai else "api_key_missing"
             else:
                 self._set_progress(70, "Generating outreach messages ...")
-                self._log("[4/4] Generating outreach messages with Claude ...")
+                self._log("[5/5] Generating outreach messages with Claude ...")
                 businesses = generate_messages(
                     businesses,
                     score_threshold=threshold,

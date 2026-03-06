@@ -62,6 +62,13 @@ SCORE_WEIGHTS = {
     "good_rating_bonus":        5,   # 4.5+ stars
     "excellent_rating_bonus":   8,   # 4.8+ stars
 
+    # --- Contact discovery bonuses ---
+    "instagram_found":         15,   # Instagram profile discovered
+    "facebook_found":          10,   # Facebook page discovered
+    "tiktok_found":             8,   # TikTok profile discovered
+    "email_found":             15,   # email address discovered
+    "yelp_found":               5,   # Yelp listing discovered
+
     # --- Penalties ---
     "chain_penalty":          -20,   # suspected chain / franchise
     "strong_website_penalty":  -15,  # modern, complete site detected
@@ -128,6 +135,13 @@ SERVICE_KEYWORDS = [
     "accounting", "tax", "insurance", "real estate", "attorney", "lawyer",
     "photography", "wedding", "florist", "tutoring",
 ]
+
+# ---------------------------------------------------------------------------
+# Contact discovery (search-based)
+# ---------------------------------------------------------------------------
+CONTACT_DISCOVERY_TIMEOUT = 10   # seconds per search request
+CONTACT_DISCOVERY_DELAY_MIN = 1.5  # min seconds between search queries
+CONTACT_DISCOVERY_DELAY_MAX = 3.0  # max seconds between search queries
 
 # ---------------------------------------------------------------------------
 # Targeting mode
