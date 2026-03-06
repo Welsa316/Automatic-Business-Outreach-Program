@@ -170,7 +170,7 @@ def _ddg_search_library(query: str, max_results: int = 8) -> list[dict]:
             if results:
                 logger.debug("DDGS search OK: %r → %d results", query, len(results))
             else:
-                logger.debug("DDGS search returned 0 results for %r", query)
+                logger.warning("DDGS search returned 0 results for %r", query)
             return results
         except Exception as exc:
             wait = (attempt + 1) * 3
@@ -181,6 +181,7 @@ def _ddg_search_library(query: str, max_results: int = 8) -> list[dict]:
             _ddgs = None
             if attempt < 2:
                 time.sleep(wait)
+    logger.warning("All search attempts failed for: %s", query)
     return []
 
 
@@ -271,7 +272,8 @@ def _clean_name(name: str) -> str:
     """Simplify business name for matching."""
     # Remove common suffixes, punctuation
     cleaned = re.sub(r"[''`]", "", name.lower())
-    cleaned = re.sub(r"\b(llc|inc|corp|ltd|restaurant|bar|grill|cafe|café)\b", "", cleaned)
+    cleaned = re.sub(r"\b(llc|inc|corp|ltd|the|and|of|restaurant|bar|grill|cafe|café|"
+                      r"sports|kitchen|house|place|shop|store|lounge|club)\b", "", cleaned)
     cleaned = re.sub(r"[^a-z0-9\s]", "", cleaned)
     return cleaned.strip()
 
@@ -288,6 +290,8 @@ def _name_matches(url: str, biz_name: str) -> bool:
     if not significant:
         return True  # short name, can't filter well
     matches = sum(1 for w in significant if w in url_lower)
+    if matches == 0:
+        logger.debug("Name match failed: words=%s not found in URL %s", significant, url_lower)
     return matches >= 1
 
 
@@ -297,6 +301,10 @@ def _find_instagram(biz_name: str, city: str) -> str:
         f"site:instagram.com {biz_name} {city}",
         f"{biz_name} {city} instagram",
     ]
+    # Fallback: try without city if city queries return nothing useful
+    if city:
+        queries.append(f"site:instagram.com {biz_name}")
+        queries.append(f"{biz_name} instagram")
     for query in queries:
         results = _ddg_search(query, max_results=5)
         _rate_limit()
@@ -313,8 +321,10 @@ def _find_instagram(biz_name: str, city: str) -> str:
                 continue
             if _name_matches(url, biz_name):
                 clean = f"https://instagram.com/{path}"
-                logger.debug("Instagram found: %s → %s", biz_name, clean)
+                logger.info("    ✅ Instagram found: %s", clean)
                 return clean
+            else:
+                logger.info("    ⏭️  Instagram candidate rejected (name mismatch): %s", url)
     return ""
 
 
@@ -324,6 +334,9 @@ def _find_facebook(biz_name: str, city: str) -> str:
         f"site:facebook.com {biz_name} {city}",
         f"{biz_name} {city} facebook",
     ]
+    if city:
+        queries.append(f"site:facebook.com {biz_name}")
+        queries.append(f"{biz_name} facebook")
     for query in queries:
         results = _ddg_search(query, max_results=5)
         _rate_limit()
@@ -339,50 +352,58 @@ def _find_facebook(biz_name: str, city: str) -> str:
                 continue
             if _name_matches(url, biz_name):
                 clean = f"https://facebook.com/{path}"
-                logger.debug("Facebook found: %s → %s", biz_name, clean)
+                logger.info("    ✅ Facebook found: %s", clean)
                 return clean
+            else:
+                logger.info("    ⏭️  Facebook candidate rejected (name mismatch): %s", url)
     return ""
 
 
 def _find_tiktok(biz_name: str, city: str) -> str:
     """Search for the business's TikTok profile."""
-    query = f"site:tiktok.com {biz_name} {city}"
-    results = _ddg_search(query, max_results=5)
-    _rate_limit()
-    for r in results:
-        url = r["url"]
-        parsed = urlparse(url)
-        if "tiktok.com" not in parsed.netloc:
-            continue
-        if _TIKTOK_REJECT.search(url):
-            continue
-        path = parsed.path.strip("/")
-        if not path or not path.startswith("@"):
-            continue
-        if "/" in path:
-            continue  # sub-page like /@user/video/123
-        if _name_matches(url, biz_name):
-            clean = f"https://tiktok.com/{path}"
-            logger.debug("TikTok found: %s → %s", biz_name, clean)
-            return clean
+    queries = [f"site:tiktok.com {biz_name} {city}"]
+    if city:
+        queries.append(f"site:tiktok.com {biz_name}")
+    for query in queries:
+        results = _ddg_search(query, max_results=5)
+        _rate_limit()
+        for r in results:
+            url = r["url"]
+            parsed = urlparse(url)
+            if "tiktok.com" not in parsed.netloc:
+                continue
+            if _TIKTOK_REJECT.search(url):
+                continue
+            path = parsed.path.strip("/")
+            if not path or not path.startswith("@"):
+                continue
+            if "/" in path:
+                continue  # sub-page like /@user/video/123
+            if _name_matches(url, biz_name):
+                clean = f"https://tiktok.com/{path}"
+                logger.info("    ✅ TikTok found: %s", clean)
+                return clean
     return ""
 
 
 def _find_yelp(biz_name: str, city: str) -> str:
     """Search for the business's Yelp page."""
-    query = f"site:yelp.com {biz_name} {city}"
-    results = _ddg_search(query, max_results=5)
-    _rate_limit()
-    for r in results:
-        url = r["url"]
-        parsed = urlparse(url)
-        if "yelp.com" not in parsed.netloc:
-            continue
-        if "/biz/" not in parsed.path:
-            continue  # only want business pages
-        if _name_matches(url, biz_name):
-            logger.debug("Yelp found: %s → %s", biz_name, url)
-            return url
+    queries = [f"site:yelp.com {biz_name} {city}"]
+    if city:
+        queries.append(f"site:yelp.com {biz_name}")
+    for query in queries:
+        results = _ddg_search(query, max_results=5)
+        _rate_limit()
+        for r in results:
+            url = r["url"]
+            parsed = urlparse(url)
+            if "yelp.com" not in parsed.netloc:
+                continue
+            if "/biz/" not in parsed.path:
+                continue  # only want business pages
+            if _name_matches(url, biz_name):
+                logger.info("    ✅ Yelp found: %s", url)
+                return url
     return ""
 
 
@@ -531,11 +552,17 @@ def discover_all_contacts(
     # Quick connectivity check — test a simple search before processing all businesses
     if _HAS_DDGS:
         logger.info("Using duckduckgo-search library for contact discovery")
+        print("      Search backend: duckduckgo-search library")
     else:
         logger.warning("duckduckgo-search not installed — using HTML fallback (less reliable)")
+        print("      ⚠️  duckduckgo-search NOT installed — using HTML scraping fallback")
     test_results = _ddg_search("test", max_results=1)
     if not test_results:
         logger.warning("Search connectivity test failed — results may be limited")
+        print("      ⚠️  Search connectivity test FAILED — DuckDuckGo may be blocking requests")
+        print("      Contact discovery results will likely be empty.")
+    else:
+        print("      ✅ Search connectivity test passed")
 
     for i, biz in enumerate(businesses):
         name = biz.get("business_name", "?")
