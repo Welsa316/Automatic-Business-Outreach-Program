@@ -102,6 +102,20 @@ def score_business(biz: dict, analysis: SiteAnalysis | None) -> dict:
         pitch_angles.append("skip_chain")
 
     # ------------------------------------------------------------------
+    # 5. Contact discovery bonuses
+    # ------------------------------------------------------------------
+    if biz.get("instagram"):
+        add("Instagram profile found", "instagram_found")
+    if biz.get("facebook"):
+        add("Facebook page found", "facebook_found")
+    if biz.get("tiktok"):
+        add("TikTok profile found", "tiktok_found")
+    if biz.get("email"):
+        add("Email address found", "email_found")
+    if biz.get("yelp"):
+        add("Yelp listing found", "yelp_found")
+
+    # ------------------------------------------------------------------
     # Compute total
     # ------------------------------------------------------------------
     total = sum(item["points"] for item in breakdown)

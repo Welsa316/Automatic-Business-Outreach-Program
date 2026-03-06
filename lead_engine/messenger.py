@@ -122,6 +122,25 @@ def _build_prompt(biz: dict) -> str:
     context_lines.append(f"Website status: {website_status}")
     if issues:
         context_lines.append(f"Detected issues: {', '.join(issues)}")
+
+    # Discovered contact methods
+    instagram = biz.get("instagram", "")
+    facebook = biz.get("facebook", "")
+    tiktok = biz.get("tiktok", "")
+    email_found = biz.get("email", "")
+    if instagram:
+        context_lines.append(f"Instagram: {instagram}")
+    if facebook:
+        context_lines.append(f"Facebook: {facebook}")
+    if tiktok:
+        context_lines.append(f"TikTok: {tiktok}")
+    if email_found:
+        context_lines.append(f"Email: {email_found}")
+
+    contact_count = biz.get("contact_methods_found", 0)
+    if contact_count:
+        context_lines.append(f"Contact methods found: {contact_count}")
+
     context_lines.append(f"Lead score: {score}")
     context_lines.append(f"Recommended angle: {angle}")
 

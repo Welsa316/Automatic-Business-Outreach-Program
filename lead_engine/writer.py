@@ -21,6 +21,12 @@ OUTPUT_COLUMNS = [
     "phone",
     "website",
     "final_url",
+    "instagram",
+    "facebook",
+    "tiktok",
+    "email",
+    "yelp",
+    "contact_methods_found",
     "rating",
     "review_count",
     "lead_score",
@@ -60,6 +66,12 @@ def _biz_to_row(biz: dict) -> dict:
         "phone":                biz.get("phone", ""),
         "website":              biz.get("website", ""),
         "final_url":            biz.get("final_url", ""),
+        "instagram":            biz.get("instagram", ""),
+        "facebook":             biz.get("facebook", ""),
+        "tiktok":               biz.get("tiktok", ""),
+        "email":                biz.get("email", ""),
+        "yelp":                 biz.get("yelp", ""),
+        "contact_methods_found": biz.get("contact_methods_found", 0),
         "rating":               biz.get("rating", ""),
         "review_count":         biz.get("review_count", ""),
         "lead_score":           biz.get("lead_score", 0),
@@ -103,6 +115,14 @@ def _build_report(businesses: list[dict]) -> str:
     # Top 20 leads
     top20 = businesses[:20]
 
+    # Contact discovery stats
+    has_ig = sum(1 for b in businesses if b.get("instagram"))
+    has_fb = sum(1 for b in businesses if b.get("facebook"))
+    has_tt = sum(1 for b in businesses if b.get("tiktok"))
+    has_em = sum(1 for b in businesses if b.get("email"))
+    has_yelp = sum(1 for b in businesses if b.get("yelp"))
+    has_any_contact = sum(1 for b in businesses if b.get("contact_methods_found", 0) > 0)
+
     lines = [
         "=" * 60,
         "  LEAD SCORING SUMMARY REPORT",
@@ -112,6 +132,14 @@ def _build_report(businesses: list[dict]) -> str:
         f"Businesses with NO website:   {no_website}",
         f"Websites unreachable/broken:  {unreachable}",
         f"Social-media-only profiles:   {social_only}",
+        "",
+        "  CONTACT DISCOVERY",
+        f"  Instagram found:            {has_ig}",
+        f"  Facebook found:             {has_fb}",
+        f"  TikTok found:               {has_tt}",
+        f"  Email found:                {has_em}",
+        f"  Yelp found:                 {has_yelp}",
+        f"  Any contact method:         {has_any_contact} / {total}",
         "",
         "-" * 60,
         "  TOP REASONS FOR HIGH SCORES",

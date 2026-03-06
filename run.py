@@ -40,6 +40,7 @@ config.ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 from lead_engine.utils import setup_logging, save_json
 from lead_engine.loader import load_csv
 from lead_engine.analyzer import analyze_websites
+from lead_engine.contact_discovery import discover_all_contacts
 from lead_engine.scorer import score_all
 from lead_engine.messenger import generate_messages
 from lead_engine.writer import write_outputs
@@ -132,6 +133,8 @@ Examples:
                    help="Only process first N rows (0 = all)")
     p.add_argument("--no-analyze", action="store_true",
                    help="Skip website analysis (score based on metadata only)")
+    p.add_argument("--no-contacts", action="store_true",
+                   help="Skip contact discovery (social media / email search)")
     p.add_argument("--no-ai", action="store_true",
                    help="Skip Claude message generation entirely")
     p.add_argument("--ai-limit", type=int, default=0,
@@ -192,7 +195,7 @@ def main() -> None:
     # ------------------------------------------------------------------
     # Stage 1: Load & normalise
     # ------------------------------------------------------------------
-    print("\n[1/4] Loading and normalising CSV ...")
+    print("\n[1/5] Loading and normalising CSV ...")
     businesses = load_csv(csv_path)
     if args.limit:
         businesses = businesses[:args.limit]
@@ -207,10 +210,10 @@ def main() -> None:
     skip_analyze = args.no_analyze or config.NO_WEBSITE_ONLY
     if skip_analyze:
         reason = "no-website-only mode" if config.NO_WEBSITE_ONLY else "--no-analyze"
-        print(f"\n[2/4] Skipping website analysis ({reason})")
+        print(f"\n[2/5] Skipping website analysis ({reason})")
         analyses = {}
     else:
-        print(f"\n[2/4] Analysing websites (timeout={config.REQUEST_TIMEOUT}s, "
+        print(f"\n[2/5] Analysing websites (timeout={config.REQUEST_TIMEOUT}s, "
               f"concurrency={config.MAX_CONCURRENT_REQUESTS}) ...")
         analyses = asyncio.run(
             analyze_websites(businesses, max_concurrent=args.concurrency)
@@ -220,9 +223,34 @@ def main() -> None:
     _save_progress(businesses, "analyzed")
 
     # ------------------------------------------------------------------
-    # Stage 3: Scoring
+    # Stage 3: Contact discovery
     # ------------------------------------------------------------------
-    print("\n[3/4] Scoring leads ...")
+    if args.no_contacts:
+        print("\n[3/5] Skipping contact discovery (--no-contacts)")
+    else:
+        print(f"\n[3/5] Discovering contacts (social media, emails) ...")
+        print(f"      This searches for each business — may take a few minutes.")
+        contacts = discover_all_contacts(businesses)
+
+        # Attach contact info to each business dict
+        for i, biz in enumerate(businesses):
+            info = contacts.get(i)
+            if info:
+                biz["instagram"] = info.instagram
+                biz["facebook"] = info.facebook
+                biz["tiktok"] = info.tiktok
+                biz["email"] = info.email
+                biz["yelp"] = info.yelp
+                biz["contact_methods_found"] = info.contact_methods_found
+
+        found_any = sum(1 for c in contacts.values() if c.contact_methods_found > 0)
+        print(f"      Found contacts for {found_any}/{len(businesses)} businesses.")
+    _save_progress(businesses, "contacts_discovered")
+
+    # ------------------------------------------------------------------
+    # Stage 4: Scoring
+    # ------------------------------------------------------------------
+    print("\n[4/5] Scoring leads ...")
     businesses = score_all(businesses, analyses)
     top = businesses[0] if businesses else {}
     print(f"      Top lead: {top.get('business_name', '?')} "
@@ -230,10 +258,10 @@ def main() -> None:
     _save_progress(businesses, "scored")
 
     # ------------------------------------------------------------------
-    # Stage 4: Message generation
+    # Stage 5: Message generation
     # ------------------------------------------------------------------
     if args.no_ai:
-        print("\n[4/4] Skipping AI message generation (--no-ai)")
+        print("\n[5/5] Skipping AI message generation (--no-ai)")
         for biz in businesses:
             biz["email_message"] = ""
             biz["contact_form_message"] = ""
@@ -244,14 +272,14 @@ def main() -> None:
         _ensure_api_key()
 
         if not config.ANTHROPIC_API_KEY:
-            print("\n[4/4] No API key — skipping AI message generation.")
+            print("\n[5/5] No API key — skipping AI message generation.")
             for biz in businesses:
                 biz["email_message"] = ""
                 biz["contact_form_message"] = ""
                 biz["dm_message"] = ""
                 biz["message_error"] = "api_key_missing"
         else:
-            print("\n[4/4] Generating outreach messages with Claude ...")
+            print("\n[5/5] Generating outreach messages with Claude ...")
             businesses = generate_messages(
                 businesses,
                 score_threshold=args.score_threshold,
