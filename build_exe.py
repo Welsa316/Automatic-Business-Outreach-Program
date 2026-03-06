@@ -64,6 +64,10 @@ def main():
         "--hidden-import", "socksio",
         "--hidden-import", "idna",
         "--hidden-import", "charset_normalizer",
+        "--hidden-import", "duckduckgo_search",
+        "--hidden-import", "primp",
+        "--hidden-import", "lxml",
+        "--hidden-import", "click",
         "gui.py",                      # build the GUI version
     ]
 

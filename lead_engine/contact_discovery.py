@@ -2,7 +2,7 @@
 contact_discovery.py — Find social media profiles and email addresses
 for businesses that have no website.
 
-Uses DuckDuckGo HTML search to discover Instagram, Facebook, TikTok,
+Uses DuckDuckGo search to discover Instagram, Facebook, TikTok,
 Yelp pages, and email addresses using business name + city queries.
 """
 
@@ -14,9 +14,21 @@ from dataclasses import dataclass, field
 from urllib.parse import urlparse, unquote
 
 import httpx
-from bs4 import BeautifulSoup
 
 from . import config
+
+# Try the dedicated DuckDuckGo search library first (much more reliable)
+try:
+    from duckduckgo_search import DDGS
+    _HAS_DDGS = True
+except ImportError:
+    _HAS_DDGS = False
+
+try:
+    from bs4 import BeautifulSoup
+    _HAS_BS4 = True
+except ImportError:
+    _HAS_BS4 = False
 
 logger = logging.getLogger("lead_engine")
 
@@ -80,12 +92,12 @@ _JUNK_EMAIL_DOMAINS = {
     "instagram.com", "tiktok.com", "yelp.com", "apple.com",
 }
 
-# HTTP headers for search requests
+# HTTP headers for search requests (used by HTML fallback and Google Maps)
 _HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
+        "Chrome/131.0.0.0 Safari/537.36"
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
@@ -93,6 +105,9 @@ _HEADERS = {
 
 # Reusable httpx client (created lazily to avoid import-time side effects)
 _client: httpx.Client | None = None
+
+# Reusable DDGS instance
+_ddgs: "DDGS | None" = None
 
 
 def _get_client() -> httpx.Client:
@@ -108,18 +123,69 @@ def _get_client() -> httpx.Client:
     return _client
 
 
+def _get_ddgs() -> "DDGS":
+    """Return a shared DDGS instance, creating it on first use."""
+    global _ddgs
+    if _ddgs is None:
+        _ddgs = DDGS()
+    return _ddgs
+
+
 # ---------------------------------------------------------------------------
 # Search helpers
 # ---------------------------------------------------------------------------
 
 def _ddg_search(query: str, max_results: int = 8) -> list[dict]:
     """
-    Search DuckDuckGo HTML and return a list of result dicts:
+    Search DuckDuckGo and return a list of result dicts:
       [{"url": "...", "title": "...", "snippet": "..."}, ...]
 
-    Uses the HTML lite version to avoid needing an API key.
-    Retries with exponential backoff if DuckDuckGo blocks/rate-limits.
+    Uses the duckduckgo-search library (primary) with HTML fallback.
     """
+    # --- Primary: duckduckgo-search library ---
+    if _HAS_DDGS:
+        return _ddg_search_library(query, max_results)
+
+    # --- Fallback: manual HTML scraping ---
+    if _HAS_BS4:
+        return _ddg_search_html(query, max_results)
+
+    logger.error("No search backend available — install duckduckgo-search")
+    return []
+
+
+def _ddg_search_library(query: str, max_results: int = 8) -> list[dict]:
+    """Search using the duckduckgo-search Python library."""
+    for attempt in range(3):
+        try:
+            ddgs = _get_ddgs()
+            raw = ddgs.text(query, max_results=max_results)
+            results = []
+            for r in raw:
+                results.append({
+                    "url": r.get("href", ""),
+                    "title": r.get("title", ""),
+                    "snippet": r.get("body", ""),
+                })
+            if results:
+                logger.debug("DDGS search OK: %r → %d results", query, len(results))
+            else:
+                logger.debug("DDGS search returned 0 results for %r", query)
+            return results
+        except Exception as exc:
+            wait = (attempt + 1) * 3
+            logger.warning("DDGS search error for %r (attempt %d/3): %s — retrying in %ds",
+                           query, attempt + 1, exc, wait)
+            # Reset the DDGS instance in case it's in a bad state
+            global _ddgs
+            _ddgs = None
+            if attempt < 2:
+                time.sleep(wait)
+    return []
+
+
+def _ddg_search_html(query: str, max_results: int = 8) -> list[dict]:
+    """Fallback: scrape DuckDuckGo HTML lite directly."""
     url = "https://html.duckduckgo.com/html/"
 
     for attempt in range(3):
@@ -128,7 +194,7 @@ def _ddg_search(query: str, max_results: int = 8) -> list[dict]:
             resp = client.post(url, data={"q": query, "b": ""})
             resp.raise_for_status()
         except httpx.HTTPError as exc:
-            logger.warning("Search failed for %r: %s", query, exc)
+            logger.warning("HTML search failed for %r: %s", query, exc)
             return []
 
         soup = BeautifulSoup(resp.text, "html.parser")
@@ -139,7 +205,7 @@ def _ddg_search(query: str, max_results: int = 8) -> list[dict]:
                 or "blocked" in page_text
                 or "unusual traffic" in page_text
                 or "robot" in page_text):
-            wait = (attempt + 1) * 5  # 5s, 10s, 15s
+            wait = (attempt + 1) * 5
             logger.warning("DuckDuckGo rate-limited on %r — waiting %ds (attempt %d/3)",
                            query, wait, attempt + 1)
             time.sleep(wait)
@@ -153,7 +219,6 @@ def _ddg_search(query: str, max_results: int = 8) -> list[dict]:
                 continue
 
             href = link_tag.get("href", "")
-            # DuckDuckGo wraps URLs in a redirect — extract the real URL
             real_url = _extract_ddg_url(href)
             if not real_url:
                 continue
@@ -167,7 +232,6 @@ def _ddg_search(query: str, max_results: int = 8) -> list[dict]:
                 break
 
         if not results and attempt < 2:
-            # Got zero results — might be a soft block, retry once with a delay
             wait = (attempt + 1) * 4
             logger.debug("Zero results for %r — retrying after %ds", query, wait)
             time.sleep(wait)
@@ -182,7 +246,6 @@ def _ddg_search(query: str, max_results: int = 8) -> list[dict]:
 def _extract_ddg_url(href: str) -> str:
     """Extract the actual destination URL from a DuckDuckGo redirect link."""
     if "uddg=" in href:
-        # //duckduckgo.com/l/?uddg=https%3A%2F%2F...&rut=...
         match = re.search(r"uddg=([^&]+)", href)
         if match:
             return unquote(match.group(1))
@@ -464,6 +527,15 @@ def discover_all_contacts(
     """
     total = len(businesses)
     results: dict[int, ContactInfo] = {}
+
+    # Quick connectivity check — test a simple search before processing all businesses
+    if _HAS_DDGS:
+        logger.info("Using duckduckgo-search library for contact discovery")
+    else:
+        logger.warning("duckduckgo-search not installed — using HTML fallback (less reliable)")
+    test_results = _ddg_search("test", max_results=1)
+    if not test_results:
+        logger.warning("Search connectivity test failed — results may be limited")
 
     for i, biz in enumerate(businesses):
         name = biz.get("business_name", "?")
