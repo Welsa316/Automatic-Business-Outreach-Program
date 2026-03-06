@@ -403,9 +403,12 @@ class LeadEngineApp:
             self._set_progress(15)
 
             # ---- Stage 2: Website analysis ----
-            if skip_analyze:
-                self._set_progress(40, "Skipping website analysis")
-                self._log("[2/4] Skipping website analysis.")
+            # Auto-skip when targeting only no-website businesses
+            do_skip = skip_analyze or config.NO_WEBSITE_ONLY
+            if do_skip:
+                reason = "no-website-only mode" if config.NO_WEBSITE_ONLY else "skipped"
+                self._set_progress(40, f"Skipping website analysis ({reason})")
+                self._log(f"[2/4] Skipping website analysis ({reason}).")
                 analyses = {}
             else:
                 self._set_progress(20, "Analysing websites ...")
@@ -458,9 +461,7 @@ class LeadEngineApp:
             self._log(f"\nDone in {elapsed:.1f}s!")
 
             # Summary stats in the log
-            no_site = sum(1 for b in businesses if not b.get("website"))
-            self._log(f"\nTotal: {len(businesses)} businesses")
-            self._log(f"No website: {no_site}")
+            self._log(f"\nTotal: {len(businesses)} leads (no website)")
             self._log(f"Top 5 leads:")
             for b in businesses[:5]:
                 self._log(f"  [{b.get('lead_score', 0):>3} pts]  {b.get('business_name', '?')}")

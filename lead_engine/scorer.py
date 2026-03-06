@@ -57,77 +57,24 @@ def score_business(biz: dict, analysis: SiteAnalysis | None) -> dict:
             breakdown.append({"reason": reason, "points": pts})
 
     has_website = bool(biz.get("website"))
-    categories = biz.get("categories", [])
-    is_rest = _is_restaurant(categories)
-    is_svc = _is_service(categories)
 
     # ------------------------------------------------------------------
-    # 1. Website existence / reachability
+    # 1. Website existence
     # ------------------------------------------------------------------
     if not has_website:
         add("No website listed", "no_website")
         pitch_angles.append("needs_new_website")
     elif analysis:
+        # These only apply when NO_WEBSITE_ONLY is off and we're
+        # also looking at businesses that have websites
         if analysis.is_social_only:
             add("Only a social media page (no real website)", "social_media_only")
             pitch_angles.append("needs_new_website")
         elif not analysis.reachable:
             add("Website is unreachable / broken", "site_unreachable")
             pitch_angles.append("site_broken")
-
-    # ------------------------------------------------------------------
-    # 2. Technical quality (only if site was reachable)
-    # ------------------------------------------------------------------
-    if has_website and analysis and analysis.reachable:
-        if not analysis.has_ssl:
-            add("No HTTPS / SSL", "no_ssl")
-            pitch_angles.append("security_upgrade")
-
-        if not analysis.has_viewport:
-            add("No mobile viewport meta tag", "no_viewport")
-            pitch_angles.append("mobile_improvement")
-
-        if analysis.is_slow:
-            add(f"Slow response ({analysis.response_time}s)", "slow_response")
-            pitch_angles.append("speed_improvement")
-
-        if analysis.is_thin_content:
-            add("Very thin / minimal content", "thin_content")
-            pitch_angles.append("content_improvement")
-
-        if analysis.is_placeholder:
-            add("Looks like a placeholder / parked page", "placeholder_site")
-            pitch_angles.append("needs_new_website")
-
-        if analysis.is_outdated_design:
-            add("Outdated HTML (tables/frames/old tags)", "outdated_design")
-            pitch_angles.append("redesign")
-
-        if not analysis.has_contact_info:
-            add("No visible contact info on homepage", "no_contact_info")
-            pitch_angles.append("contact_improvement")
-
-        if not analysis.has_cta:
-            add("No clear call-to-action", "no_cta")
-            pitch_angles.append("cta_improvement")
-
-        # Category-specific UX checks
-        if is_rest:
-            if not analysis.has_menu_link:
-                add("Restaurant without menu link", "no_menu")
-                pitch_angles.append("add_menu")
-            if not analysis.has_ordering_link:
-                add("Restaurant without online ordering", "no_online_ordering")
-                pitch_angles.append("add_ordering")
-
-        if is_svc:
-            if not analysis.has_booking_link:
-                add("Service business without booking option", "no_booking")
-                pitch_angles.append("add_booking")
-
-        # Check if website is actually strong — penalise (low priority)
-        issue_count = len([b for b in breakdown if b["points"] > 0])
-        if issue_count == 0:
+        elif analysis.reachable:
+            # Business has a working website — low priority
             add("Website looks modern and complete", "strong_website_penalty")
             pitch_angles.append("low_priority")
 

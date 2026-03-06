@@ -203,8 +203,11 @@ def main() -> None:
     # ------------------------------------------------------------------
     # Stage 2: Website analysis
     # ------------------------------------------------------------------
-    if args.no_analyze:
-        print("\n[2/4] Skipping website analysis (--no-analyze)")
+    # Skip automatically when targeting only no-website businesses
+    skip_analyze = args.no_analyze or config.NO_WEBSITE_ONLY
+    if skip_analyze:
+        reason = "no-website-only mode" if config.NO_WEBSITE_ONLY else "--no-analyze"
+        print(f"\n[2/4] Skipping website analysis ({reason})")
         analyses = {}
     else:
         print(f"\n[2/4] Analysing websites (timeout={config.REQUEST_TIMEOUT}s, "

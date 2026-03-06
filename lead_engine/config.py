@@ -130,7 +130,15 @@ SERVICE_KEYWORDS = [
 ]
 
 # ---------------------------------------------------------------------------
+# Targeting mode
+# ---------------------------------------------------------------------------
+# When True, ONLY businesses with NO website are kept as leads.
+# Businesses that have any website URL are filtered out entirely.
+# Set to False later if you want to also target businesses with weak sites.
+NO_WEBSITE_ONLY = True
+
+# ---------------------------------------------------------------------------
 # Message-generation settings
 # ---------------------------------------------------------------------------
-MESSAGE_SCORE_THRESHOLD = 20   # only generate messages for scores >= this
+MESSAGE_SCORE_THRESHOLD = 10   # only generate messages for scores >= this
 MAX_MESSAGES_PER_RUN = 0       # 0 = unlimited; set to e.g. 50 to cap costs
