@@ -11,59 +11,60 @@ A local Python tool that takes a CSV export of businesses (from Google Maps / Ap
 5. **Generates** three tailored outreach messages per lead (email, contact form, DM) using the Claude API
 6. **Outputs** enriched CSVs, a ranked CSV, high-priority CSV, full JSON, and a text summary report
 
-## Option A: Run as a .exe (easiest)
+## Option A: Desktop App with GUI (easiest)
 
-No Python knowledge needed after the initial build.
+A proper windowed app — no terminal needed.
 
-### One-time build
+### One-time setup
 
 1. Install Python 3.11+ from [python.org](https://www.python.org/downloads/) (check **"Add Python to PATH"**)
 2. Open a terminal in this project folder and run:
    ```
    pip install -r requirements.txt
-   python build_exe.py
    ```
-3. This creates a `dist/LeadEngine/` folder with `LeadEngine.exe` inside
 
-### Using the .exe
+### Launch the GUI
 
-1. Copy the entire `dist/LeadEngine/` folder wherever you want (Desktop, etc.)
-2. Drop your CSV file into that folder
-3. Double-click **LeadEngine.exe**
-4. On first run, it will ask for your Anthropic API key — paste it and press Enter
-5. The key is saved automatically in a `.env` file next to the .exe, so you only do this once
-6. Pick your CSV file from the menu, and it runs
+```
+python gui.py
+```
 
-Output files appear in an `output/` folder next to the .exe.
+The app opens in its own window where you can:
+- Browse to your CSV file
+- Paste your API key (saved automatically)
+- Adjust settings (row limit, score threshold, etc.)
+- Click **Run** and watch progress in real time
+- Open the output folder with one click
+
+### Build as a standalone .exe
+
+To create a double-clickable .exe you can put on your Desktop:
+
+```
+python build_exe.py
+```
+
+This creates `dist/LeadEngine/LeadEngine.exe`. Copy that whole folder wherever you want, drop your CSV in it, and double-click the .exe.
 
 ---
 
-## Option B: Run as a Python script
+## Option B: Run from terminal (CLI)
 
-### 1. Install Python
+### Setup
 
-Download Python 3.11+ from [python.org](https://www.python.org/downloads/). During install, check **"Add Python to PATH"**.
+1. Install Python 3.11+ from [python.org](https://www.python.org/downloads/) (check **"Add Python to PATH"**)
+2. Open a terminal in this project folder:
+   ```
+   pip install -r requirements.txt
+   ```
 
-### 2. Clone / download this project
-
-```
-git clone https://github.com/Welsa316/Automatic-Business-Outreach-Program.git
-cd Automatic-Business-Outreach-Program
-```
-
-### 3. Install dependencies
-
-```
-pip install -r requirements.txt
-```
-
-### 4. Run the tool
+### Run
 
 ```
 python run.py
 ```
 
-On first run, it will ask for your Anthropic API key and save it automatically. Or you can set it manually:
+On first run, it will ask for your Anthropic API key and save it automatically. Or set it manually:
 
 ```
 copy .env.example .env
@@ -154,7 +155,8 @@ All weights are configurable in `lead_engine/config.py`.
 
 ```
 Automatic-Business-Outreach-Program/
-├── run.py                  # Main entry point (CLI)
+├── gui.py                  # Desktop GUI (double-click to launch)
+├── run.py                  # CLI version (terminal usage)
 ├── build_exe.py            # One-click .exe builder
 ├── requirements.txt        # Python dependencies
 ├── .env.example            # API key template
