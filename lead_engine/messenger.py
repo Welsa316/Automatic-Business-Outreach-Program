@@ -127,24 +127,24 @@ def _build_prompt(biz: dict) -> str:
 
     context_block = "\n".join(context_lines)
 
-    prompt = f"""You are helping a freelance web developer write outreach messages to local businesses.
+    prompt = f"""You are helping a freelance web developer write outreach messages to local businesses that currently have NO website.
 
 BUSINESS CONTEXT:
 {context_block}
 
-PITCH ANGLE:
-{angle_desc}
+YOUR GOAL:
+This business does not have a website. You want to offer to build them a professional, modern, mobile-friendly website that helps customers find them, builds trust, and grows their business. Tailor the message to their specific business type (e.g. a restaurant needs an online menu and ordering, a salon needs online booking, etc.).
 
 Write exactly three outreach messages for this business. Each must:
 - Mention the business by name ("{name}")
-- Sound like a real person wrote it (not a template)
+- Sound like a real person wrote it — natural, conversational, human
 - Be concise (3-5 sentences max)
 - Be professional, friendly, and direct
-- NOT sound like spam
-- NOT promise fake audits or made-up statistics
-- NOT mention things you could not realistically know
-- NOT use hype words like "skyrocket" or "explosive growth"
-- Reference a specific, relevant issue ONLY if one was actually detected
+- Mention a specific benefit relevant to their business type (e.g. "customers could see your menu and order online" for a restaurant)
+- NOT sound like spam or a mass template
+- NOT promise fake audits, made-up statistics, or guaranteed results
+- NOT use hype words like "skyrocket", "explosive growth", "dominate"
+- NOT be pushy or overly salesy — just a helpful introduction
 
 Format your response EXACTLY like this (keep the labels):
 
