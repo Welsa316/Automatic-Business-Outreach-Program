@@ -56,8 +56,11 @@ ANTHROPIC_API_KEY = ""         # set via .env or at runtime
 NO_WEBSITE_ONLY = False        # if True, skip website analysis stage
 
 # ---------------------------------------------------------------------------
-# Excel output settings
+# Email discovery settings
 # ---------------------------------------------------------------------------
+EMAIL_REQUEST_TIMEOUT = 10         # HTTP timeout for website scraping
+EMAIL_MAX_CONCURRENT = 5           # Max concurrent requests
+
 EXCEL_FILENAME = "lead_tracker.xlsx"
 EXCEL_HIGH_SCORE_THRESHOLD = 50   # green highlight threshold
 EXCEL_MEDIUM_SCORE_THRESHOLD = 30  # yellow highlight threshold
