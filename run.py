@@ -43,7 +43,7 @@ from lead_engine.analyzer import analyze_websites
 from lead_engine.contact_discovery import discover_all_contacts
 from lead_engine.scorer import score_all
 from lead_engine.messenger import generate_messages
-from lead_engine.writer import write_outputs
+from lead_engine.writer import write_outputs, load_contacted
 
 import logging
 logger = logging.getLogger("lead_engine")
@@ -280,10 +280,14 @@ def main() -> None:
                 biz["message_error"] = "api_key_missing"
         else:
             print("\n[5/5] Generating outreach messages with Claude ...")
+            contacted = load_contacted(args.output)
+            if contacted:
+                print(f"      Skipping {len(contacted)} previously contacted businesses.")
             businesses = generate_messages(
                 businesses,
                 score_threshold=args.score_threshold,
                 max_messages=args.ai_limit,
+                contacted_keys=contacted,
             )
     _save_progress(businesses, "messaged")
 
