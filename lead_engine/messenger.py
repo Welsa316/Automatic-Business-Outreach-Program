@@ -11,6 +11,7 @@ import json
 import logging
 
 from . import config
+from .writer import _dedup_key
 
 logger = logging.getLogger("lead_engine")
 
@@ -117,7 +118,15 @@ def _generate_for_business(biz: dict) -> dict | None:
             text = text.rsplit("```", 1)[0]
             text = text.strip()
 
-        return json.loads(text)
+        parsed = json.loads(text)
+        if isinstance(parsed, list):
+            # Claude occasionally wraps the response in a list
+            parsed = parsed[0] if parsed else {}
+        if not isinstance(parsed, dict):
+            logger.warning("Unexpected JSON type for %s: %s",
+                           biz.get("business_name", "?"), type(parsed).__name__)
+            return None
+        return parsed
 
     except json.JSONDecodeError as e:
         logger.warning("JSON parse error for %s: %s",
@@ -133,6 +142,7 @@ def generate_messages(
     businesses: list[dict],
     score_threshold: int = 0,
     max_messages: int = 0,
+    contacted_keys: set[str] | None = None,
 ) -> list[dict]:
     """
     Generate AI outreach messages for qualifying businesses.
@@ -141,18 +151,30 @@ def generate_messages(
         businesses: List of business dicts from the pipeline.
         score_threshold: Minimum lead_score to generate messages for.
         max_messages: Max number of businesses to generate for (0 = no limit).
+        contacted_keys: Dedup keys of previously contacted businesses to skip.
 
     Returns:
         The same businesses list with message fields populated.
     """
     threshold = score_threshold or config.MESSAGE_SCORE_THRESHOLD
+    contacted_keys = contacted_keys or set()
 
     # Identify which businesses qualify
     qualifying = []
+    skipped_contacted = 0
     for i, biz in enumerate(businesses):
         score = biz.get("lead_score", 0)
-        if score >= threshold:
-            qualifying.append((i, biz))
+        if score < threshold:
+            continue
+        key = _dedup_key(biz.get("business_name", ""), str(biz.get("phone", "")))
+        if key in contacted_keys:
+            skipped_contacted += 1
+            biz["message_error"] = "already_contacted"
+            continue
+        qualifying.append((i, biz))
+
+    if skipped_contacted:
+        logger.info("Skipped %d previously contacted businesses", skipped_contacted)
 
     # Apply limit
     if max_messages and len(qualifying) > max_messages:

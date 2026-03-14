@@ -104,6 +104,19 @@ def _load_existing(path: Path) -> list[dict]:
     return rows
 
 
+def load_contacted(output_dir: str = "output") -> set[str]:
+    """Return dedup keys for businesses marked as contacted in the Excel tracker."""
+    path = Path(output_dir) / config.EXCEL_FILENAME
+    if not path.exists():
+        return set()
+    rows = _load_existing(path)
+    return {
+        _dedup_key(r.get("business_name", ""), str(r.get("phone", "")))
+        for r in rows
+        if str(r.get("contacted", "")).strip().lower() == "yes"
+    }
+
+
 def _merge_rows(existing: list[dict], new_businesses: list[dict]) -> list[dict]:
     """
     Merge existing Excel rows with new business data.
