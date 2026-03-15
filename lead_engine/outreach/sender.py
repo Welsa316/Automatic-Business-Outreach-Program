@@ -1,15 +1,19 @@
 """
-sender.py — Email sending via Resend API.
+sender.py — Email sending via Resend API or Gmail SMTP.
 
 Sends emails one at a time with safety delays between each send.
 Every send is logged and tracked in the database.
 
-Resend docs: https://resend.com/docs/api-reference/emails/send-email
+Supports two providers:
+  - "gmail"  — free, uses Gmail SMTP with an App Password
+  - "resend" — Resend API (requires verified custom domain)
 """
 
+import smtplib
 import time
 import random
 import logging
+from email.mime.text import MIMEText
 
 from . import outreach_config as cfg
 from .safety import check_lead_safety, check_from_address
@@ -30,6 +34,53 @@ def _add_unsubscribe_footer(body: str, email: str) -> str:
         f"\"unsubscribe\" and we'll remove you from our list immediately."
     )
     return body + footer
+
+
+def _send_via_gmail(to: str, subject: str, body: str, from_field: str) -> tuple[bool, str]:
+    """Send an email via Gmail SMTP using an App Password."""
+    try:
+        msg = MIMEText(body, "plain", "utf-8")
+        msg["From"] = from_field
+        msg["To"] = to
+        msg["Subject"] = subject
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as server:
+            server.login(cfg.FROM_EMAIL, cfg.GMAIL_APP_PASSWORD)
+            server.sendmail(cfg.FROM_EMAIL, [to], msg.as_string())
+
+        return True, f"gmail-{to}"
+
+    except smtplib.SMTPAuthenticationError:
+        return False, (
+            "Gmail authentication failed. Check your App Password. "
+            "Generate one at: myaccount.google.com > Security > App Passwords"
+        )
+    except Exception as e:
+        return False, str(e)
+
+
+def _send_via_resend(to: str, subject: str, body: str, from_field: str) -> tuple[bool, str]:
+    """Send an email via the Resend API."""
+    try:
+        import resend
+    except ImportError:
+        return False, "resend package not installed (pip install resend)"
+
+    resend.api_key = cfg.RESEND_API_KEY
+
+    try:
+        params = {
+            "from": from_field,
+            "to": [to],
+            "subject": subject,
+            "text": body,
+        }
+        result = resend.Emails.send(params)
+        message_id = result.get("id", "") if isinstance(result, dict) else str(result)
+        return True, message_id
+
+    except Exception as e:
+        return False, str(e)
 
 
 def send_single(lead: dict, db, dry_run: bool = False) -> tuple[bool, str]:
@@ -77,37 +128,22 @@ def send_single(lead: dict, db, dry_run: bool = False) -> tuple[bool, str]:
         logger.info("  Body preview: %s...", body[:100])
         return True, "dry_run"
 
-    # --- Actually send via Resend ---
-    try:
-        import resend
-    except ImportError:
-        error = "resend package not installed (pip install resend)"
-        logger.error(error)
-        db.mark_failed(email, error)
-        return False, error
+    # --- Send via configured provider ---
+    provider = cfg.EMAIL_PROVIDER
 
-    resend.api_key = cfg.RESEND_API_KEY
+    if provider == "gmail":
+        success, result_msg = _send_via_gmail(email, subject, body_with_footer, from_field)
+    else:
+        success, result_msg = _send_via_resend(email, subject, body_with_footer, from_field)
 
-    try:
-        params = {
-            "from": from_field,
-            "to": [email],
-            "subject": subject,
-            "text": body_with_footer,
-        }
+    if success:
+        logger.info("Sent to %s (%s) via %s — ID: %s", biz_name, email, provider, result_msg)
+        db.mark_sent(email, result_msg)
+    else:
+        logger.error("Send failed for %s (%s) via %s: %s", biz_name, email, provider, result_msg)
+        db.mark_failed(email, result_msg)
 
-        result = resend.Emails.send(params)
-        message_id = result.get("id", "") if isinstance(result, dict) else str(result)
-
-        logger.info("Sent to %s (%s) — ID: %s", biz_name, email, message_id)
-        db.mark_sent(email, message_id)
-        return True, message_id
-
-    except Exception as e:
-        error_msg = str(e)
-        logger.error("Send failed for %s (%s): %s", biz_name, email, error_msg)
-        db.mark_failed(email, error_msg)
-        return False, error_msg
+    return success, result_msg
 
 
 def send_batch(leads: list[dict], db, dry_run: bool = False) -> tuple[int, int, int]:

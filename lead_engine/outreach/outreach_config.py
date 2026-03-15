@@ -18,6 +18,17 @@ FROM_EMAIL = os.getenv("OUTREACH_FROM_EMAIL", "")
 FROM_NAME = os.getenv("OUTREACH_FROM_NAME", "")
 
 # ---------------------------------------------------------------------------
+# Email provider selection — "gmail" or "resend"
+# ---------------------------------------------------------------------------
+# "gmail"  — Send via Gmail SMTP (free, uses your Gmail + App Password)
+# "resend" — Send via Resend API (requires verified custom domain)
+EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "gmail").lower()
+
+# Gmail SMTP — generate an App Password at:
+#   myaccount.google.com → Security → 2-Step Verification → App Passwords
+GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
+
+# ---------------------------------------------------------------------------
 # Safety limits
 # ---------------------------------------------------------------------------
 DAILY_SEND_CAP = int(os.getenv("OUTREACH_DAILY_CAP", "20"))

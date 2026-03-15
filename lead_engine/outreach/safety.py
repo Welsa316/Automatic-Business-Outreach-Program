@@ -157,10 +157,19 @@ def check_lead_safety(lead: dict, db) -> SafetyCheckResult:
 
 def check_from_address() -> tuple[bool, str]:
     """
-    Verify that the FROM email and Resend API key are configured.
+    Verify that the FROM email and provider credentials are configured.
     """
-    if not cfg.RESEND_API_KEY:
-        return False, "RESEND_API_KEY not set in .env"
     if not cfg.FROM_EMAIL:
         return False, "OUTREACH_FROM_EMAIL not set in .env"
+
+    if cfg.EMAIL_PROVIDER == "gmail":
+        if not cfg.GMAIL_APP_PASSWORD:
+            return False, (
+                "GMAIL_APP_PASSWORD not set in .env. "
+                "Generate one at: myaccount.google.com > Security > App Passwords"
+            )
+    else:
+        if not cfg.RESEND_API_KEY:
+            return False, "RESEND_API_KEY not set in .env"
+
     return True, "ok"

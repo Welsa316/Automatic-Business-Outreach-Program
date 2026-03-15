@@ -34,6 +34,8 @@ except ImportError:
 
 from lead_engine.outreach import outreach_config as cfg
 # Re-read keys after dotenv
+cfg.EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "gmail").lower()
+cfg.GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
 cfg.RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 cfg.FROM_EMAIL = os.getenv("OUTREACH_FROM_EMAIL", "")
 cfg.FROM_NAME = os.getenv("OUTREACH_FROM_NAME", "")

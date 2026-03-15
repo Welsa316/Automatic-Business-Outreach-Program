@@ -96,6 +96,8 @@ class LeadEngineApp:
         self.running = False
 
         # Outreach config — load from .env
+        self.email_provider = StringVar(value=os.getenv("EMAIL_PROVIDER", "gmail"))
+        self.gmail_app_password = StringVar(value=os.getenv("GMAIL_APP_PASSWORD", ""))
         self.resend_key = StringVar(value=os.getenv("RESEND_API_KEY", ""))
         self.from_email = StringVar(value=os.getenv("OUTREACH_FROM_EMAIL", ""))
         self.from_name = StringVar(value=os.getenv("OUTREACH_FROM_NAME", ""))
@@ -209,19 +211,33 @@ class LeadEngineApp:
         og = ttk.Frame(row3, style="Card.TFrame")
         og.pack(fill=X, padx=12, pady=10)
 
+        # Provider selector
+        r = 0
+        ttk.Label(og, text="Email Provider:", style="Label.TLabel").grid(
+            row=r, column=0, sticky=W, padx=(0, 8), pady=2)
+        provider_frame = ttk.Frame(og, style="Card.TFrame")
+        provider_frame.grid(row=r, column=1, sticky=W, pady=2)
+        ttk.Radiobutton(provider_frame, text="Gmail (free)",
+                        variable=self.email_provider, value="gmail",
+                        style="Card.TRadiobutton").pack(side=LEFT, padx=(0, 16))
+        ttk.Radiobutton(provider_frame, text="Resend (custom domain)",
+                        variable=self.email_provider, value="resend",
+                        style="Card.TRadiobutton").pack(side=LEFT)
+
         outreach_fields = [
-            (0, "Resend API Key:", self.resend_key, "(resend.com — free 100/day)"),
-            (1, "From Email:", self.from_email, "(verified in Resend dashboard)"),
-            (2, "From Name:", self.from_name, "(your display name)"),
-            (3, "Your Name:", self.your_name, ""),
-            (4, "Your Business:", self.your_business, ""),
-            (5, "Your Service:", self.your_service, "(what you offer)"),
-            (6, "Your Website:", self.your_website, ""),
+            (1, "Gmail App Password:", self.gmail_app_password, "(myaccount.google.com > App Passwords)"),
+            (2, "Resend API Key:", self.resend_key, "(resend.com — free 100/day)"),
+            (3, "From Email:", self.from_email, "(your Gmail or verified domain)"),
+            (4, "From Name:", self.from_name, "(your display name)"),
+            (5, "Your Name:", self.your_name, ""),
+            (6, "Your Business:", self.your_business, ""),
+            (7, "Your Service:", self.your_service, "(what you offer)"),
+            (8, "Your Website:", self.your_website, ""),
         ]
         for r, label, var, hint in outreach_fields:
             ttk.Label(og, text=label, style="Label.TLabel").grid(
                 row=r, column=0, sticky=W, padx=(0, 8), pady=2)
-            show = "*" if "Key" in label else None
+            show = "*" if ("Key" in label or "Password" in label) else None
             e = ttk.Entry(og, textvariable=var, width=45, style="Input.TEntry",
                           show=show or "")
             e.grid(row=r, column=1, sticky=EW, pady=2)
@@ -302,6 +318,10 @@ class LeadEngineApp:
         s.configure("Card.TCheckbutton", background=BG_CARD, foreground=FG,
                      font=("Segoe UI", 9))
         s.map("Card.TCheckbutton", background=[("active", BG_CARD)])
+
+        s.configure("Card.TRadiobutton", background=BG_CARD, foreground=FG,
+                     font=("Segoe UI", 10))
+        s.map("Card.TRadiobutton", background=[("active", BG_CARD)])
 
         s.configure("Accent.TButton", background=ACCENT, foreground="#ffffff",
                      font=("Segoe UI", 9, "bold"), borderwidth=0, padding=(10, 4))
@@ -437,6 +457,8 @@ class LeadEngineApp:
     def _save_outreach_config(self) -> None:
         """Persist outreach settings to .env and update runtime config."""
         env_vars = {
+            "EMAIL_PROVIDER": self.email_provider.get().strip(),
+            "GMAIL_APP_PASSWORD": self.gmail_app_password.get().strip(),
             "RESEND_API_KEY": self.resend_key.get().strip(),
             "OUTREACH_FROM_EMAIL": self.from_email.get().strip(),
             "OUTREACH_FROM_NAME": self.from_name.get().strip(),
@@ -447,6 +469,8 @@ class LeadEngineApp:
         }
 
         # Update runtime config
+        outreach_cfg.EMAIL_PROVIDER = env_vars["EMAIL_PROVIDER"]
+        outreach_cfg.GMAIL_APP_PASSWORD = env_vars["GMAIL_APP_PASSWORD"]
         outreach_cfg.RESEND_API_KEY = env_vars["RESEND_API_KEY"]
         outreach_cfg.FROM_EMAIL = env_vars["OUTREACH_FROM_EMAIL"]
         outreach_cfg.FROM_NAME = env_vars["OUTREACH_FROM_NAME"]
@@ -480,10 +504,20 @@ class LeadEngineApp:
 
     def _validate_outreach_config(self) -> str | None:
         """Check outreach config is ready. Returns error message or None."""
-        if not self.resend_key.get().strip():
-            return "Resend API Key is required.\nGet one free at resend.com"
         if not self.from_email.get().strip():
-            return "From Email is required.\nThis must be verified in your Resend dashboard."
+            return "From Email is required."
+
+        provider = self.email_provider.get().strip()
+        if provider == "gmail":
+            if not self.gmail_app_password.get().strip():
+                return (
+                    "Gmail App Password is required.\n"
+                    "Generate one at:\n"
+                    "myaccount.google.com > Security > App Passwords"
+                )
+        else:
+            if not self.resend_key.get().strip():
+                return "Resend API Key is required.\nGet one free at resend.com"
         return None
 
     # ------------------------------------------------------------------
