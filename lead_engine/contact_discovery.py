@@ -153,6 +153,7 @@ async def _scrape_website_emails(
         logger.warning("beautifulsoup4 not installed — skipping website scraping")
         return []
 
+    from . import config as _cfg
     all_emails: list[str] = []
     urls_to_check = [website_url]
 
@@ -169,6 +170,8 @@ async def _scrape_website_emails(
             verify=False,
         ) as client:
             for idx, url in enumerate(urls_to_check):
+                if _cfg.is_shutting_down():
+                    break
                 try:
                     resp = await client.get(url)
                     if resp.status_code >= 400:
@@ -321,6 +324,9 @@ async def _discover_contacts(
     semaphore: asyncio.Semaphore,
 ) -> ContactInfo:
     """Discover contact email for a single business."""
+    if config.is_shutting_down():
+        return ContactInfo()
+
     name = biz.get("business_name", "")
     city = biz.get("city", "")
     website = biz.get("website", "")

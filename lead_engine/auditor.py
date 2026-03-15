@@ -169,6 +169,9 @@ async def _audit_one(
     http_sem: asyncio.Semaphore,
 ) -> str:
     """Fetch HTML and run AI audit for a single business."""
+    if config.is_shutting_down():
+        return ""
+
     # Fetch HTML
     async with http_sem:
         try:

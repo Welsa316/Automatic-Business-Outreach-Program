@@ -204,6 +204,12 @@ def generate_messages(
     success = 0
     errors = 0
     for count, (idx, biz) in enumerate(qualifying, 1):
+        # Check for shutdown request
+        if config.is_shutting_down():
+            logger.info("Shutdown requested — stopping message generation "
+                        "(%d/%d completed)", count - 1, len(qualifying))
+            break
+
         name = biz.get("business_name", "?")
         logger.info("  [%d/%d] Generating messages for %s ...",
                     count, len(qualifying), name)
