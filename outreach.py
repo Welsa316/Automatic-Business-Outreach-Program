@@ -15,6 +15,7 @@ Commands:
 """
 
 import argparse
+import signal
 import sys
 import os
 import logging
@@ -380,7 +381,23 @@ Typical workflow:
         parser.print_help()
 
 
+def _install_signal_handlers() -> None:
+    """Install signal handlers for graceful shutdown on Ctrl+C."""
+    from lead_engine import config as main_config
+
+    def _handler(signum, frame):
+        print("\n\n*** Shutdown requested — finishing current task... ***")
+        print("*** Press Ctrl+C again to force quit. ***\n")
+        main_config.request_shutdown()
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+    signal.signal(signal.SIGINT, _handler)
+    if hasattr(signal, "SIGTERM"):
+        signal.signal(signal.SIGTERM, _handler)
+
+
 if __name__ == "__main__":
+    _install_signal_handlers()
     try:
         main()
     except KeyboardInterrupt:

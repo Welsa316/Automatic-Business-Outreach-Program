@@ -71,6 +71,29 @@ NO_WEBSITE_ONLY = False        # if True, skip website analysis stage
 EMAIL_REQUEST_TIMEOUT = 10         # HTTP timeout for website scraping
 EMAIL_MAX_CONCURRENT = 5           # Max concurrent requests
 
+# ---------------------------------------------------------------------------
+# Graceful shutdown
+# ---------------------------------------------------------------------------
+import threading
+
+shutdown_event = threading.Event()
+
+
+def request_shutdown() -> None:
+    """Signal all pipeline stages to stop gracefully."""
+    shutdown_event.set()
+
+
+def is_shutting_down() -> bool:
+    """Check whether a graceful shutdown has been requested."""
+    return shutdown_event.is_set()
+
+
+def reset_shutdown() -> None:
+    """Clear the shutdown flag (e.g. before a new run in the GUI)."""
+    shutdown_event.clear()
+
+
 EXCEL_FILENAME = "lead_tracker.xlsx"
 EXCEL_HIGH_SCORE_THRESHOLD = 50   # green highlight threshold
 EXCEL_MEDIUM_SCORE_THRESHOLD = 30  # yellow highlight threshold

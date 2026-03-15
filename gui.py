@@ -230,12 +230,16 @@ class LeadEngineApp:
                     row=r, column=2, sticky=W, padx=(6, 0), pady=2)
         og.columnconfigure(1, weight=1)
 
-        # -- Run button --
+        # -- Run / Stop buttons --
         btn_frame = ttk.Frame(body, style="Body.TFrame")
         btn_frame.pack(fill=X, pady=(0, 10))
         self.run_btn = ttk.Button(btn_frame, text="  Run Lead Engine  ",
                                    command=self._on_run, style="Run.TButton")
         self.run_btn.pack(side=LEFT)
+        self.stop_btn = ttk.Button(btn_frame, text="  Stop  ",
+                                    command=self._on_stop, style="Stop.TButton",
+                                    state=DISABLED)
+        self.stop_btn.pack(side=LEFT, padx=(12, 0))
         self.send_btn = ttk.Button(btn_frame, text="  Send Emails  ",
                                     command=self._on_send, style="Accent.TButton")
         self.send_btn.pack(side=LEFT, padx=(12, 0))
@@ -310,6 +314,12 @@ class LeadEngineApp:
               background=[("active", "#6dff96"), ("disabled", BORDER)],
               foreground=[("disabled", FG_DIM)])
 
+        s.configure("Stop.TButton", background="#ff5555", foreground="#ffffff",
+                     font=("Segoe UI", 12, "bold"), borderwidth=0, padding=(18, 8))
+        s.map("Stop.TButton",
+              background=[("active", "#ff6e6e"), ("disabled", BORDER)],
+              foreground=[("disabled", FG_DIM)])
+
         s.configure("Custom.Horizontal.TProgressbar",
                      troughcolor=BG_CARD, background=ACCENT, bordercolor=BG_CARD,
                      lightcolor=ACCENT, darkcolor=ACCENT)
@@ -356,11 +366,18 @@ class LeadEngineApp:
                 self.progress_var.set(text)
         self.root.after(0, _update)
 
+    def _on_stop(self) -> None:
+        """Handle Stop button click — request graceful shutdown."""
+        config.request_shutdown()
+        self._log("\n*** Stop requested — finishing current task... ***")
+        self._set_progress(self.progress_bar["value"], "Stopping...")
+        self.stop_btn.configure(state=DISABLED)
+
     def _set_running(self, running: bool) -> None:
         def _update():
             self.running = running
-            state = DISABLED if running else NORMAL
-            self.run_btn.configure(state=state)
+            self.run_btn.configure(state=DISABLED if running else NORMAL)
+            self.stop_btn.configure(state=NORMAL if running else DISABLED)
         self.root.after(0, _update)
 
     # ------------------------------------------------------------------
@@ -495,6 +512,7 @@ class LeadEngineApp:
     def _run_send_pipeline(self) -> None:
         """Run the outreach send pipeline in a background thread."""
         try:
+            config.reset_shutdown()
             self._save_outreach_config()
             output_dir = self.output_dir.get().strip() or str(BASE_DIR / "output")
             excel_path = str(Path(output_dir) / "lead_tracker.xlsx")
@@ -577,6 +595,7 @@ class LeadEngineApp:
 
     def _run_pipeline(self) -> None:
         try:
+            config.reset_shutdown()
             csv_path = self.csv_path.get().strip()
             output_dir = self.output_dir.get().strip() or str(BASE_DIR / "output")
             limit = self.row_limit.get()
@@ -600,6 +619,12 @@ class LeadEngineApp:
             self._log(f"      {no_listed} without listed website.")
             self._set_progress(10)
 
+            if config.is_shutting_down():
+                self._log("\n*** Stopped. Partial results saved. ***")
+                write_outputs(businesses, output_dir)
+                self._set_progress(100, "Stopped (partial results saved)")
+                return
+
             # ---- Stage 2: Website discovery & analysis ----
             self._set_progress(12, "Analysing websites ...")
             self._log("[2/6] Analysing & discovering websites ...")
@@ -609,6 +634,12 @@ class LeadEngineApp:
             not_found = sum(1 for a in analyses.values() if a.website_status == "not_found")
             self._log(f"      {listed} listed, {discovered} discovered, {not_found} not found.")
             self._set_progress(25)
+
+            if config.is_shutting_down():
+                self._log("\n*** Stopped after website analysis. Saving results... ***")
+                write_outputs(businesses, output_dir)
+                self._set_progress(100, "Stopped (partial results saved)")
+                return
 
             # ---- Stage 2b: Website content audit ----
             if do_audit:
@@ -624,6 +655,12 @@ class LeadEngineApp:
             else:
                 self._log("[2b] Skipping website audit.")
             self._set_progress(35)
+
+            if config.is_shutting_down():
+                self._log("\n*** Stopped after audit. Saving results... ***")
+                write_outputs(businesses, output_dir)
+                self._set_progress(100, "Stopped (partial results saved)")
+                return
 
             # ---- Stage 3: Discover contacts ----
             if do_contacts:
@@ -644,6 +681,12 @@ class LeadEngineApp:
                 self._log("[3/6] Skipping contact discovery.")
             self._set_progress(55)
 
+            if config.is_shutting_down():
+                self._log("\n*** Stopped after contact discovery. Saving results... ***")
+                write_outputs(businesses, output_dir)
+                self._set_progress(100, "Stopped (partial results saved)")
+                return
+
             # ---- Stage 4: Score ----
             self._set_progress(58, "Scoring leads ...")
             self._log("[4/6] Scoring leads ...")
@@ -654,6 +697,12 @@ class LeadEngineApp:
                 self._log(f"      Top lead: {top.get('business_name', '?')} "
                           f"(score={top.get('lead_score', 0)})")
             self._set_progress(65)
+
+            if config.is_shutting_down():
+                self._log("\n*** Stopped after scoring. Saving results... ***")
+                write_outputs(businesses, output_dir)
+                self._set_progress(100, "Stopped (partial results saved)")
+                return
 
             # ---- Stage 5: AI message generation ----
             if do_ai:

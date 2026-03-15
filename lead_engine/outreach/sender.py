@@ -128,9 +128,18 @@ def send_batch(leads: list[dict], db, dry_run: bool = False) -> tuple[int, int, 
     failed = 0
     skipped = 0
 
+    from .. import config as main_config
+
     for i, lead in enumerate(leads):
         email = lead.get("email", "")
         biz_name = lead.get("business_name", "?")
+
+        # Check for shutdown request
+        if main_config.is_shutting_down():
+            remaining = len(leads) - i
+            logger.warning("Shutdown requested. Stopping. %d leads remaining.", remaining)
+            skipped += remaining
+            break
 
         # Check daily cap before each send
         if not dry_run and db.count_sent_today() >= cfg.DAILY_SEND_CAP:

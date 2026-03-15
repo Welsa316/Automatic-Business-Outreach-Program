@@ -12,6 +12,7 @@ Usage:
 import argparse
 import asyncio
 import os
+import signal
 import sys
 import time
 import json
@@ -172,9 +173,24 @@ def interactive_csv_prompt() -> str:
         return input("Enter path to CSV file: ").strip()
 
 
+def _install_signal_handlers() -> None:
+    """Install signal handlers for graceful shutdown on Ctrl+C."""
+    def _handler(signum, frame):
+        print("\n\n*** Shutdown requested — finishing current task and saving progress... ***")
+        print("*** Press Ctrl+C again to force quit. ***\n")
+        config.request_shutdown()
+        # Restore default handler so a second Ctrl+C kills immediately
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+    signal.signal(signal.SIGINT, _handler)
+    if hasattr(signal, "SIGTERM"):
+        signal.signal(signal.SIGTERM, _handler)
+
+
 def main() -> None:
     args = parse_args()
     setup_logging(args.verbose)
+    _install_signal_handlers()
 
     # Apply config overrides
     if args.timeout:
@@ -206,6 +222,10 @@ def main() -> None:
     print(f"      Loaded {len(businesses)} businesses.")
     _save_progress(businesses, "loaded")
 
+    if config.is_shutting_down():
+        print("\n*** Stopped after loading. Progress saved. ***")
+        return
+
     # ------------------------------------------------------------------
     # Stage 2: Website analysis
     # ------------------------------------------------------------------
@@ -225,6 +245,10 @@ def main() -> None:
         print(f"      {sites_ok} reachable / {len(analyses)} checked.")
     _save_progress(businesses, "analyzed")
 
+    if config.is_shutting_down():
+        print("\n*** Stopped after website analysis. Progress saved. ***")
+        return
+
     # ------------------------------------------------------------------
     # Stage 2b: Website content audit
     # ------------------------------------------------------------------
@@ -242,6 +266,10 @@ def main() -> None:
         else:
             print("\n[2b] No API key — skipping website audit.")
     _save_progress(businesses, "audited")
+
+    if config.is_shutting_down():
+        print("\n*** Stopped after website audit. Progress saved. ***")
+        return
 
     # ------------------------------------------------------------------
     # Stage 3: Contact discovery
@@ -266,6 +294,10 @@ def main() -> None:
         print(f"      Found contacts for {found_any}/{len(businesses)} businesses.")
     _save_progress(businesses, "contacts_discovered")
 
+    if config.is_shutting_down():
+        print("\n*** Stopped after contact discovery. Progress saved. ***")
+        return
+
     # ------------------------------------------------------------------
     # Stage 4: Scoring
     # ------------------------------------------------------------------
@@ -277,6 +309,10 @@ def main() -> None:
     if top.get("recommended_pitch_label"):
         print(f"      Angle: {top.get('recommended_pitch_label')}")
     _save_progress(businesses, "scored")
+
+    if config.is_shutting_down():
+        print("\n*** Stopped after scoring. Progress saved. ***")
+        return
 
     # ------------------------------------------------------------------
     # Stage 5: Message generation
@@ -313,13 +349,21 @@ def main() -> None:
     _save_progress(businesses, "messaged")
 
     # ------------------------------------------------------------------
-    # Write outputs
+    # Write outputs (always write what we have, even after shutdown)
     # ------------------------------------------------------------------
-    print("\nWriting output files ...")
+    stopped = config.is_shutting_down()
+    if stopped:
+        print("\n*** Stopped after message generation. Saving partial results... ***")
+    else:
+        print("\nWriting output files ...")
+
     files = write_outputs(businesses, args.output)
     elapsed = time.time() - t_start
 
-    print(f"\nDone in {elapsed:.1f}s. Output files:")
+    if stopped:
+        print(f"\nPartial results saved in {elapsed:.1f}s:")
+    else:
+        print(f"\nDone in {elapsed:.1f}s. Output files:")
     for label, path in files.items():
         print(f"  {label:20s} → {path}")
     print()

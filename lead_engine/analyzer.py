@@ -19,6 +19,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from . import config
 from .config import REQUEST_TIMEOUT, MAX_CONCURRENT_REQUESTS
 
 logger = logging.getLogger("lead_engine")
@@ -150,6 +151,8 @@ async def _discover_website(
         return SiteAnalysis(website_status="not_found")
 
     for domain in candidates:
+        if config.is_shutting_down():
+            return SiteAnalysis(website_status="not_found")
         async with sem:
             if not await _dns_resolve(domain):
                 continue
